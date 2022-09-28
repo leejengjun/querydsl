@@ -1,15 +1,14 @@
 package study.querydsl;
 
 import com.querydsl.core.QueryResults;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.entity.Member;
-import study.querydsl.entity.QMember;
 import study.querydsl.entity.Team;
 
 import javax.persistence.EntityManager;
@@ -18,6 +17,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 import static study.querydsl.entity.QMember.*;
+import static study.querydsl.entity.QTeam.*;
 
 @SpringBootTest
 @Transactional
@@ -267,5 +267,168 @@ public class QuerydslBasicTest {
         assertThat(queryResults.getOffset()).isEqualTo(1);
         assertThat(queryResults.getResults().size()).isEqualTo(2);
     }
+
+    /**
+     * JPQL
+     * select
+     * COUNT(m), //회원수
+     * SUM(m.age), //나이 합
+     * AVG(m.age), //평균 나이
+     * MAX(m.age), //최대 나이
+     * MIN(m.age) //최소 나이
+     * from Member m
+     *
+     * JPQL이 제공하는 모든 집합 함수를 제공한다.
+     * tuple은 프로젝션과 결과반환에서 설명한다
+     */
+    @Test
+    public void aggregation()  {
+        List<Tuple> result = queryFactory
+                .select(
+                        member.count(),
+                        member.age.sum(),
+                        member.age.avg(),
+                        member.age.max(),
+                        member.age.min()
+                )
+                .from(member)
+                .fetch();
+
+        Tuple tuple = result.get(0);
+        assertThat(tuple.get(member.count())).isEqualTo(4);
+        assertThat(tuple.get(member.age.sum())).isEqualTo(100);
+        assertThat(tuple.get(member.age.avg())).isEqualTo(25);
+        assertThat(tuple.get(member.age.max())).isEqualTo(40);
+        assertThat(tuple.get(member.age.min())).isEqualTo(10);
+
+    }
+
+    /**
+     * 팀의 이름과 각 팀의 평균 연령을 구해라.
+     * groupBy , 그룹화된 결과를 제한하려면 having
+     */
+    @Test
+    public void group() throws Exception {
+        List<Tuple> result = queryFactory
+                .select(team.name, member.age.avg())
+                .from(member)
+                .join(member.team, team)
+                .groupBy(team.name)
+                .fetch();
+
+        Tuple teamA = result.get(0);
+        Tuple teamB = result.get(1);
+
+        assertThat(teamA.get(team.name)).isEqualTo("teamA");
+        assertThat(teamA.get(member.age.avg())).isEqualTo(15); //(10 + 20) / 2
+
+        assertThat(teamB.get(team.name)).isEqualTo("teamB");
+        assertThat(teamB.get(member.age.avg())).isEqualTo(35); //(30 + 40) / 2
+    }
+
+    /**
+     * 기본 조인
+     * 조인의 기본 문법은 첫 번째 파라미터에 조인 대상을 지정하고,
+     * 두 번째 파라미터에 별칭(alias)으로 사용할
+     * Q 타입을 지정하면 된다.
+     *
+     * join(조인 대상, 별칭으로 사용할 Q타입)
+     */
+
+    /**
+     * 팀 A에 소속된 모든 회원
+     */
+    @Test
+    public void join() {
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .join(member.team, team)
+                .where(team.name.eq("teamA"))
+                .fetch();
+
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("member1", "member2");
+    }
+    /**
+     * join() , innerJoin() : 내부 조인(inner join)
+     * leftJoin() : left 외부 조인(left outer join)
+     * rightJoin() : rigth 외부 조인(rigth outer join)
+     * JPQL의 on 과 성능 최적화를 위한 fetch 조인 제공 -> 다음 on 절에서 설명
+     */
+
+    /**
+     * 세타 조인(연관관계가 없는 필드로 조인)
+     * 회원의 이름이 팀 이름과 같은 회원 조회
+     *
+     * from 절에 여러 엔티티를 선택해서 세타 조인
+     * 외부 조인 불가능 -> 다음에 설명할 조인 on을 사용하면 외부 조인 가능
+     */
+    @Test
+    public void theta_join() {
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+        em.persist(new Member("teamC"));
+
+        List<Member> result = queryFactory
+                .select(member)
+                .from(member, team)
+                .where(member.username.eq(team.name))
+                .fetch();
+
+        assertThat(result)
+                .extracting("username")
+                .containsExactly("teamA", "teamB");
+    }
+
+    /**
+     * 예) 회원과 팀을 조인하면서, 팀 이름이 teamA인 팀만 조인, 회원은 모두 조회
+     * JPQL: select m, t from Member m left join m.team t on t.name = 'teamA'
+     *  SQL: SELECT m.*, t.* FROM Member m LEFT JOIN Team t ON m.TEAM_ID=t.id and
+     * t.name='teamA'
+     */
+
+    /**
+     * 참고: on 절을 활용해 조인 대상을 필터링 할 때, 외부조인이 아니라 내부조인(inner join)을 사용하면,
+     * where 절에서 필터링 하는 것과 기능이 동일하다. 따라서 on 절을 활용한 조인 대상 필터링을 사용할 때,
+     * 내부조인 이면 익숙한 where 절로 해결하고, 정말 외부조인이 필요한 경우에만 이 기능을 사용하자.
+     */
+    @Test
+    public void join_on_filtering() {
+        List<Tuple> result = queryFactory
+                .select(member, team)
+                .from(member)
+//                .leftJoin(member.team, team)
+//                .on(team.name.eq("teamA"))
+                .join(member.team, team)
+                .where(team.name.eq("teamA")) //leftJoin on 절과 결과가 동일
+                .fetch();
+
+        for (Tuple tuple : result) {
+            System.out.println("tuple = " + tuple);
+        }
+    }
+
+    /**
+     * 연관관계 없는 엔티티 외부 조인
+     * 회원의 이름이 팀 이름과 같은 대상 외부 조인
+     */
+    @Test
+    public void join_on_no_relation() {
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+        em.persist(new Member("teamC"));
+
+        List<Tuple> result = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(team).on(member.username.eq(team.name))
+                .fetch();
+
+        for (Tuple tuple : result) {
+            System.out.println("tuple = " + tuple);
+        }
+    }
+
 
 }
