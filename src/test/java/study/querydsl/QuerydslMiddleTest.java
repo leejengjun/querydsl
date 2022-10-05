@@ -130,7 +130,7 @@ public class QuerydslMiddleTest {
      */
 
     /**
-     * 프로퍼티 접근 - Setter
+     * 프로퍼티 접근 - Setter / 실무 사용 x
      */
     @Test
     public void findDtoBySetter() {
@@ -181,7 +181,7 @@ public class QuerydslMiddleTest {
             System.out.println("userDto = " + userDto);
         }
         /**
-         * UserDto에서 username이 아니라 name으로 해서 별칭이 다를경우에는 값이 담기지 않는다, 매칭실패
+         * UserDto에서 username이 아니라 name으로 해서 별칭이 다를 경우에는 값이 담기지 않는다, 매칭실패
          * userDto = UserDto(name=null, age=10)
          * userDto = UserDto(name=null, age=20)
          * userDto = UserDto(name=null, age=30)
@@ -219,7 +219,6 @@ public class QuerydslMiddleTest {
      * 주의 할 점: constructor를 사용하면 MemberDto의 생성자의 타입과 memeber 객체에 있는 필드 타입을 맞춰야 한다.
      * 안 맞추면 에러 발생함.
      * com.querydsl.core.types.ExpressionException: No constructor found for class study.querydsl.dto.MemberDto with parameters: [class java.lang.String, class java.lang.Integer]
-     *
      */
     @Test
     public void findDtoByConstructor() {
@@ -303,7 +302,7 @@ public class QuerydslMiddleTest {
      */
 
     /**
-     * BooleanBuilder 사용
+     * BooleanBuilder 사용 (쿼리의 조건 설정인 where 뒤에 조건을 생성해줌)
      */
     @Test
     public void dynamicQuery_BooleanBuilder() {
@@ -353,10 +352,23 @@ public class QuerydslMiddleTest {
     private List<Member> searchMember2(String usernameCond, Integer ageCond) {
         return queryFactory
                 .selectFrom(member)
-                .where(usernameEq(usernameCond), ageEq(ageCond))
+                .where(usernameEq(usernameCond), ageEq(ageCond))    // 쿼리 코드가 간결해짐.
                 .fetch();
     }
 
+    /**
+     * 동적쿼리를 작성하는 방법
+     * - BooleanBuilder 를 작성하는 방법
+     * - Where 절과 피라미터로 Predicate 를 이용하는 방법
+     * - Where 절과 피라미터로 Predicate 를 상속한 BooleanExpression 을 사용하는 방법
+     *
+     * BooleanExpression
+     * - Predicate의 구현체
+     * - 'null 일때 무시될 수 있음', and 또는 or절을 통해서 조합 / Predicate는 단순 true or false 조건문 정도에 사용
+     * - and 와 or 같은 메소드들을 이용해서 BooleanExpression 을 조합해서 새로운 BooleanExpression 을 만들 수 있다는 장점 -> '재사용성 높음'
+     * - 단, BooleanExpression을 사용했을 때 모든 조건절이 null이 되면 장애 발생 할 수 있으니 이 부분은 유의해서 사용
+     *
+     */
     private BooleanExpression usernameEq(String usernameCond) {
         return usernameCond != null ? member.username.eq(usernameCond) : null;
     }
@@ -531,7 +543,6 @@ public class QuerydslMiddleTest {
          * where
          *    member0_.username=lower(member0_.username)
          */
-
     }
 
 }
