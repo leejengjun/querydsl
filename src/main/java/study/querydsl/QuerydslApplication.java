@@ -14,6 +14,9 @@ public class QuerydslApplication {
 		SpringApplication.run(QuerydslApplication.class, args);
 	}
 
+	/**
+	 * JPAQueryFactory 를 빈에 등록해줌. 장단점이 있으니 잘 취사선택하면 됨.
+	 */
 	@Bean
 	JPAQueryFactory jpaQueryFactory(EntityManager em) {
 		return new JPAQueryFactory(em);

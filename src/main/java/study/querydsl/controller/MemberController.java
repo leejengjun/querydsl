@@ -15,6 +15,9 @@ public class MemberController {
 
     private final MemberJpaRepository memberJpaRepository;
 
+    /**
+     * API 컨트롤러
+     */
     @GetMapping("/v1/members")
     public List<MemberTeamDto> searchMemberV1(MemberSearchCondition condition) {
         return memberJpaRepository.search(condition);
